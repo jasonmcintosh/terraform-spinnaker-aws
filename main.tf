@@ -45,6 +45,12 @@ resource "aws_iam_role" "spinnaker_role" {
   assume_role_policy = "${data.aws_iam_policy_document.ec2_assume_role_policy.json}"
 }
 
+
+resource "aws_iam_role_policy_attachment" "spinnaker_server_role" {
+  role       = "${aws_iam_role.spinnaker_role.name}"
+  policy_arn = "${aws_iam_policy.spinnaker_policy.arn}"
+}
+
 resource "aws_iam_instance_profile" "profile_for_role" {
   role_name = "${aws_iam_role.spinnaker_role.arn}"
   name      = "SpinnakerInstanceProfile"
@@ -130,4 +136,20 @@ resource "aws_instance" "halyard_server" {
   key_name               = "${aws_key_pair.login.id}"
   vpc_security_group_ids = ["${data.aws_security_group.allow_ssh_web_to_spinnaker.id}"]
   iam_instance_profile   = "${aws_iam_instance_profile.profile_for_role.arn}"
+}
+
+data "aws_caller_identity" "current" {}
+
+module "sub_account" {
+  source = "modules/managed_account"
+  ## Defines the role used to create resources in remote account and grant MASTER account access to assume a spinnaker role in that account
+  managed_account_role = "aws:arn::1234567890:roles/CrossAccountAdmin"
+  master_account_root = "aws:arn::${data.aws_caller_identity.current.account_id}:root"
+}
+
+module "sub_account2" {
+  source = "modules/managed_account"
+  ## Defines the role used to create resources in remote account and grant MASTER account access to assume a spinnaker role in that account
+  managed_account_role = "aws:arn::51234123412:roles/CrossAccountAdmin"
+  master_account_root = "aws:arn::${data.aws_caller_identity.current.account_id}:root"
 }
