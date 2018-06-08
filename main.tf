@@ -143,13 +143,13 @@ data "aws_caller_identity" "current" {}
 module "sub_account" {
   source = "modules/managed_account"
   ## Defines the role used to create resources in remote account and grant MASTER account access to assume a spinnaker role in that account
-  managed_account_role = "aws:arn::1234567890:roles/CrossAccountAdmin"
-  master_account_root = "aws:arn::${data.aws_caller_identity.current.account_id}:root"
+  managed_account_role = "arn:aws::1234567890:roles/CrossAccountAdmin"
+  master_account_root = "arn:aws::${data.aws_caller_identity.current.account_id}:root"
 }
 
 module "sub_account2" {
   source = "modules/managed_account"
   ## Defines the role used to create resources in remote account and grant MASTER account access to assume a spinnaker role in that account
-  managed_account_role = "aws:arn::51234123412:roles/CrossAccountAdmin"
-  master_account_root = "aws:arn::${data.aws_caller_identity.current.account_id}:root"
+  managed_account_role = "arn:aws:iam::51234123412:roles/CrossAccountAdmin"
+  master_account_root = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
 }
