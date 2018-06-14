@@ -1,13 +1,14 @@
 provider "aws" {
+  region = "us-east-1"
   assume_role {
-    role_arn     = "${var.arn_master_account}"
+    role_arn     = "arn:aws::${var.masterAccountId}:role/${var.masterAccountRole}"
     session_name = "SpinnakerCreation"
   }
 }
 
 data "aws_iam_policy_document" "spinnaker_iam_policy" {
-  Statement {
-    Action = [
+  statement {
+    actions = [
       "iam:*",
       "ec2:*",
       "s3:*",
@@ -15,8 +16,8 @@ data "aws_iam_policy_document" "spinnaker_iam_policy" {
       "sts:AssumeRole",
     ]
 
-    Effect   = "Allow"
-    Resource = ["*"]
+    effect   = "Allow"
+    resources = ["*"]
   }
 }
 
@@ -52,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "spinnaker_server_role" {
 }
 
 resource "aws_iam_instance_profile" "profile_for_role" {
-  role_name = "${aws_iam_role.spinnaker_role.arn}"
+  role = "${aws_iam_role.spinnaker_role.arn}"
   name      = "SpinnakerInstanceProfile"
 }
 
@@ -64,19 +65,13 @@ module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
 
   name = "ManagementVpc"
-  cidr = "10.0.0.0/16"
+  cidr = "10.0.0.0/22"
 
-  azs             = ["us-east-1a", "us-east-1b", "us-east-1c"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-  public_subnets  = ["10.0.253.0/24", "10.0.254.0/24", "10.0.255.0/24"]
+  azs             = ["us-east-1a", "us-east-1b"]
+  public_subnets  = ["10.0.253.0/24", "10.0.254.0/24"]
 
   enable_nat_gateway = true
   enable_vpn_gateway = false
-
-  private_subnet_tags = {
-    name               = "ManagementVpc.internal.us-east-1"
-    immutable_metadata = "{'purpose':'internal'}"
-  }
 
   public_subnet_tags = {
     name               = "ManagementVpc.external.us-east-1"
@@ -86,7 +81,7 @@ module "vpc" {
 
 resource "aws_key_pair" "deployer" {
   key_name   = "spinnaker-deploy-key"
-  public_key = "${file("~/.ssh/id_rsa.pub")}"
+  public_key = "${file(pathexpand("~/.ssh/id_rsa.pub"))}"
 }
 
 data "aws_ami" "ubuntu" {
@@ -104,20 +99,22 @@ data "aws_ami" "ubuntu" {
 
   owners = ["099720109477"] # Canonical
 }
-
+data "http" "icanhazip" {
+   url = "http://icanhazip.com"
+}
 resource "aws_security_group" "allow_ssh_web_to_spinnaker" {
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "TCP"
+    self = true
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   ingress {
-    from_port   = 80
-    to_port     = 8080
-    protocol    = "TCP"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["${chomp(data.http.icanhazip.body)}/32"]
   }
 
   egress {
@@ -130,26 +127,23 @@ resource "aws_security_group" "allow_ssh_web_to_spinnaker" {
   vpc_id = "${module.vpc.vpc_id}"
 }
 
-resource "aws_instance" "halyard_server" {
+resource "aws_instance" "halyard_and_spinnaker_server" {
   ami                    = "${data.aws_ami.ubuntu.id}"
   instance_type          = "m5.xlarge"
-  key_name               = "${aws_key_pair.login.id}"
-  vpc_security_group_ids = ["${data.aws_security_group.allow_ssh_web_to_spinnaker.id}"]
+  key_name               = "${aws_key_pair.deployer.id}"
+  vpc_security_group_ids = ["${aws_security_group.allow_ssh_web_to_spinnaker.id}"]
   iam_instance_profile   = "${aws_iam_instance_profile.profile_for_role.arn}"
+  subnet_id = "${module.vpc.public_subnets[0]}"
+  user_data = "${file("${path.module}/files/user-data.sh")}"
 }
 
-data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 module "sub_account" {
   source = "modules/managed_account"
+  region = "${data.aws_region.current.name}"
   ## Defines the role used to create resources in remote account and grant MASTER account access to assume a spinnaker role in that account
-  managed_account_role = "arn:aws::1234567890:roles/CrossAccountAdmin"
-  master_account_root = "arn:aws::${data.aws_caller_identity.current.account_id}:root"
+  managed_account_role = "${var.subAccountRole[0]}"
+  master_account_root = "arn:aws::${var.masterAccountId}:root"
 }
 
-module "sub_account2" {
-  source = "modules/managed_account"
-  ## Defines the role used to create resources in remote account and grant MASTER account access to assume a spinnaker role in that account
-  managed_account_role = "arn:aws:iam::51234123412:roles/CrossAccountAdmin"
-  master_account_root = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-}

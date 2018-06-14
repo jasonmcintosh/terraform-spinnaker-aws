@@ -1,4 +1,16 @@
+variable "managed_account_role" {
+  type = "string" 
+}
+
+variable "master_account_root" {
+  type = "string"
+}
+variable "region" {
+  type = "string"
+}
+
 provider "aws" {
+  region = "${var.region}"
   assume_role {
     role_arn     = "${var.managed_account_role}"
     session_name = "SpinnakerCreation"
@@ -6,8 +18,8 @@ provider "aws" {
 }
 
 data "aws_iam_policy_document" "spinnaker_iam_policy" {
-  Statement {
-    Action = [
+  statement {
+    actions = [
       "iam:*",
       "ec2:*",
       "s3:*",
@@ -15,8 +27,8 @@ data "aws_iam_policy_document" "spinnaker_iam_policy" {
       "sts:AssumeRole",
     ]
 
-    Effect   = "Allow"
-    Resource = ["*"]
+    effect   = "Allow"
+    resources = ["*"]
   }
 }
 
