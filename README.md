@@ -11,3 +11,12 @@ Creates a spinnaker environment including a single debian based spinnaker releas
 3.  terraform apply
 4.  ssh ubuntu@<ip> (see output of the terraform apply)
 
+## Setup chaos monkey
+ON the server:
+
+sudo apt install golang-go
+go get github.com/netflix/chaosmonkey/cmd/chaosmonkey
+#### Create /etc/chaosmonkey/chaosmonkey.taml
+#### https://netflix.github.io/chaosmonkey/How-to-deploy/
+chaosmonkey migrate
+
